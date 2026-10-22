@@ -11,12 +11,17 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:d1": "npm run build && node scripts/test-local-d1.mjs",
     "deploy": "npm run build && wrangler deploy",
     "audit": "npm audit --audit-level=moderate",
-    "cf:dev": "npm run build && wrangler dev",
-    "cf:preview": "npm run build && wrangler dev --remote"
+    "cf:dev": "npm run typecheck && node scripts/cf-dev.mjs",
+    "cf:preview": "npm run build && wrangler dev --remote",
+    "db:migrate:local": "wrangler d1 migrations apply gohero-payments-local --local --env development",
+    "db:migrate:remote": "wrangler d1 migrations apply gohero-payments-db --remote",
+    "db:seed:local": "wrangler d1 execute gohero-payments-local --local --env development --file=worker/db/seeds/development.sql"
   },
   "dependencies": {
+    "jose": "^6.2.13",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

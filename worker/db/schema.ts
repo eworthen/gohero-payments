@@ -1,0 +1,1 @@
+export { FOLLOW_UP_STATUSES, LEAD_STATUSES, LEAD_STATUS_LABELS, LEAD_TYPES } from '../../src/lib/lead-config'
