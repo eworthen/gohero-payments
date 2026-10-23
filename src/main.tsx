@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 import './styles/globals.css'
 import App from './App.tsx'
 
@@ -9,8 +9,10 @@ if (!rootElement) {
   throw new Error('Root element was not found')
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const app = <StrictMode><App /></StrictMode>
+
+if (rootElement.hasAttribute('data-prerendered')) {
+  hydrateRoot(rootElement, app)
+} else {
+  createRoot(rootElement).render(app)
+}

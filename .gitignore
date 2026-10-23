@@ -16,7 +16,6 @@ dist-ssr
 !.env.example
 .wrangler/
 coverage/
-public/sitemap.xml
 
 # Editor directories and files
 .vscode/*

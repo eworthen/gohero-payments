@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { AppRoutes } from '../src/App'
@@ -45,6 +45,18 @@ describe('application routes', () => {
     const paths = Object.values(pageMetadata).map(({ path }) => path)
     expect(new Set(paths).size).toBe(paths.length)
     expect(siteConfig.name).toBe('GoHero Payments')
+  })
+
+  it('updates the document title during client-side navigation', async () => {
+    renderAt('/')
+    await waitFor(() => expect(document.title).toBe(pageMetadata.home.title))
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('link', { name: 'Payment Processing' }))
+    await waitFor(() => expect(document.title).toBe(pageMetadata.paymentProcessing.title))
+    expect(document.querySelector('meta[name="description"]')).toHaveAttribute('content', pageMetadata.paymentProcessing.description)
+    expect(document.querySelector('meta[property="og:title"]')).toHaveAttribute('content', pageMetadata.paymentProcessing.title)
+    expect(document.querySelector('meta[name="twitter:title"]')).toHaveAttribute('content', pageMetadata.paymentProcessing.title)
+    const schemas = JSON.parse(document.querySelector('script[data-seo-jsonld]')?.textContent ?? '[]')
+    expect(schemas).toEqual(expect.arrayContaining([expect.objectContaining({ '@type': 'Service', name: 'Merchant payment processing' })]))
   })
 
   it('limits inquiry validation to basic business contact fields', () => {

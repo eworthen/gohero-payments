@@ -1,22 +1,11 @@
-const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim()
-
-function getSiteOrigin(value?: string): string | undefined {
-  if (!value) return undefined
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash) return undefined
-    return url.origin
-  } catch {
-    return undefined
-  }
-}
+import { organizationName, siteOrigin } from '../seo/config'
 
 export const siteConfig = {
-  name: 'GoHero Payments',
+  name: organizationName,
   description: 'Merchant payment processing and business funding solutions for businesses.',
-  siteUrl: getSiteOrigin(configuredSiteUrl),
+  siteUrl: siteOrigin,
   organization: {
-    name: 'GoHero Payments',
+    name: organizationName,
     legalName: undefined as string | undefined,
   },
   disclosures: [] as string[],

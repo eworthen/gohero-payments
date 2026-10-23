@@ -26,6 +26,12 @@ describe('Worker request handling', () => {
     expect(response.headers.get('x-frame-options')).toBe('DENY')
   })
 
+  it('redirects trailing slash aliases to the registered canonical path', async () => {
+    const response = await handleRequest(new Request('https://example.test/payment-processing/'), env)
+    expect(response.status).toBe(308)
+    expect(response.headers.get('location')).toBe('https://example.test/payment-processing')
+  })
+
   it('fails closed for private API and admin document without Access configuration', async () => {
     const api = await handleRequest(new Request('https://example.test/api/admin/me'), privateEnv)
     const page = await handleRequest(new Request('https://example.test/admin'), privateEnv)
@@ -39,5 +45,24 @@ describe('Worker request handling', () => {
     const request = new Request('https://example.test/api/admin/me', { headers: { 'X-Dev-User': 'admin' } })
     const response = await handleRequest(request, privateEnv)
     expect(response.status).toBe(401)
+  })
+
+  it('protects direct admin HTML requests as well as admin routes', async () => {
+    const response = await handleRequest(new Request('https://example.test/admin.html'), privateEnv)
+    expect(response.status).toBe(401)
+  })
+
+  it('serves unknown documents as noindex 404 responses', async () => {
+    const requests: string[] = []
+    const missingEnv = { ASSETS: { fetch: async (request: Request) => {
+      const path = new URL(request.url).pathname
+      requests.push(path)
+      return path === '/404.html' ? new Response('not found document') : new Response(null, { status: 404 })
+    } } }
+    const response = await handleRequest(new Request('https://example.test/missing'), missingEnv)
+    expect(response.status).toBe(404)
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow')
+    expect(await response.text()).toBe('not found document')
+    expect(requests).toEqual(['/missing', '/404.html'])
   })
 })

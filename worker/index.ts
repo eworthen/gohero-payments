@@ -5,6 +5,7 @@ import { handleAdminFollowUps } from './routes/admin-follow-ups'
 import { handleAdminDashboard, handleAdminReports } from './routes/admin-reports'
 import { handleAdminLeads } from './routes/admin-leads'
 import { handleAdminUsers } from './routes/admin-users'
+import { publicRouteRegistry } from '../src/seo/routes'
 import type { ApiContext, Env } from './types'
 
 export type { Env } from './types'
@@ -26,6 +27,13 @@ function noStore(response: Response): Response {
   const headers = new Headers(response.headers)
   headers.set('Cache-Control', 'no-store')
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+}
+
+function assetRequestFor(request: Request, path: string): Request {
+  const assetUrl = new URL(request.url)
+  assetUrl.pathname = path
+  assetUrl.search = ''
+  return new Request(assetUrl, request)
 }
 
 function sameOriginMutation(request: Request, url: URL): boolean {
@@ -59,7 +67,10 @@ async function handleAdminDocument(request: Request, env: Env): Promise<Response
   const isExplicitLocal = env.APP_ENV === 'development' && env.DEV_AUTH_ENABLED === 'true'
   const user = isExplicitLocal ? true : await authenticate(request, env, env.CF_ACCESS_AUD_ADMIN)
   if (!user) return errorResponse(401, 'UNAUTHENTICATED', 'Authentication is required.')
-  return noStore(await env.ASSETS.fetch(request))
+  const response = noStore(await env.ASSETS.fetch(assetRequestFor(request, '/admin.html')))
+  const headers = new Headers(response.headers)
+  headers.set('X-Robots-Tag', 'noindex, nofollow')
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -73,8 +84,19 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       return withSecurityHeaders(noStore(await dispatchAdminApi({ request, env, user, url })))
     }
 
-    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
+    if (url.pathname === '/admin.html' || url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
       return withSecurityHeaders(await handleAdminDocument(request, env))
+    }
+
+    const normalizedPublicPath = url.pathname === '/index.html' ? '/' : url.pathname.replace(/\.html$/, '').replace(/\/+$/, '') || '/'
+    const publicRoute = publicRouteRegistry.find((route) => route.path === normalizedPublicPath)
+    if (publicRoute && (request.method === 'GET' || request.method === 'HEAD')) {
+      if (url.pathname !== publicRoute.path) {
+        const location = new URL(publicRoute.path + url.search, url.origin).toString()
+        return withSecurityHeaders(new Response(null, { status: 308, headers: { Location: location } }))
+      }
+      const assetPath = publicRoute.path === '/' ? '/index.html' : `${publicRoute.path}.html`
+      return withSecurityHeaders(await env.ASSETS.fetch(assetRequestFor(request, assetPath)))
     }
 
     if (url.pathname.startsWith('/api/')) {
@@ -83,7 +105,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       }
       return withSecurityHeaders(errorResponse(404, 'NOT_FOUND', 'The requested endpoint was not found.'))
     }
-    return withSecurityHeaders(await env.ASSETS.fetch(request))
+    const response = await env.ASSETS.fetch(request)
+    if (response.status === 404 && (request.method === 'GET' || request.method === 'HEAD')) {
+      const fallback = await env.ASSETS.fetch(assetRequestFor(request, '/404.html'))
+      const headers = new Headers(fallback.headers)
+      headers.set('X-Robots-Tag', 'noindex, nofollow')
+      return withSecurityHeaders(new Response(fallback.body, { status: 404, headers }))
+    }
+    return withSecurityHeaders(response)
   } catch {
     return withSecurityHeaders(errorResponse(500, 'INTERNAL_ERROR', 'An unexpected error occurred.'))
   }

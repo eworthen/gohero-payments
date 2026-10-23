@@ -22,11 +22,12 @@ The Vite server prints its local URL (normally `http://localhost:5173`). Copy `.
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start the Vite development server |
-| `npm run build` | Generate an optional sitemap, typecheck, and build static assets |
+| `npm run build` | Typecheck, build, prerender public routes, and generate robots/sitemap artifacts |
 | `npm run preview` | Preview the static Vite build |
 | `npm run typecheck` | Check frontend and Worker TypeScript |
 | `npm run lint` | Run Oxlint |
 | `npm run test` | Run route and Worker tests |
+| `npm run test:seo` | Build and verify prerendered page HTML, crawler artifacts, and direct Worker routes |
 | `npm run audit` | Audit installed npm dependencies |
 | `npm run cf:dev` | Build and run locally in Wrangler's Workers runtime |
 | `npm run cf:preview` | Build and run using Wrangler's remote preview mode |
@@ -37,10 +38,11 @@ The Vite server prints its local URL (normally `http://localhost:5173`). Copy `.
 ## Structure
 
 ```text
-public/                 Static public files and crawler rules
-scripts/                Build-time sitemap generation
-src/components/          Shared layout, navigation, UI, and SEO
-src/config/              Navigation, site settings, route metadata
+public/                 Static public files, icon assets, default crawler rules
+scripts/                Prerendering, local Worker, and artifact validation
+src/components/          Shared layout, navigation, UI
+src/config/              Navigation and site settings
+src/seo/                 Route registry, SEO head, schema, and sitemap logic
 src/lib/                 Shared validation
 src/pages/               Lazy-loaded route placeholders
 src/styles/              Tailwind v4 theme and global styles
@@ -51,7 +53,7 @@ wrangler.jsonc           Worker and Static Assets configuration
 
 ## Cloudflare
 
-Wrangler serves `dist/` through Static Assets and uses the SPA fallback for client routes. `/api/*` is sent to `worker/index.ts` first; `/api/health` returns service status and unknown API paths return JSON 404. Static asset responses receive baseline security headers. Cloudflare account authentication is needed only for remote preview or deployment. Run `npx wrangler login` and configure the target account/domain in Cloudflare before deployment; no resources are provisioned by this project.
+The production build prerenders each indexable public route to a route-specific HTML file in `dist/`; Wrangler's Worker maps direct public requests to those files. Client-side navigation hydrates the same React Router tree. The admin shell is generated separately as an empty, `noindex` HTML file and is only served after Cloudflare Access/Worker checks. `/api/*` is handled by `worker/index.ts`; `/api/health` returns service status and unknown API paths return JSON 404. Cloudflare Static Assets uses `html_handling: "none"` so internal `.html` asset mappings do not redirect into route loops. Static asset responses receive baseline security headers. Cloudflare account authentication is needed only for remote preview or deployment. Run `npx wrangler login` and configure the target account/domain in Cloudflare before deployment; no resources are provisioned by this project.
 
 Current security headers include nosniff, frame denial, referrer policy, and a restrictive permissions policy. CSP is intentionally not enabled yet: the final policy depends on approved analytics, form, and asset origins. Before production, define a restrictive `default-src 'self'` policy and narrowly allow only required origins; do not add unrestricted `unsafe-eval` or `unsafe-inline`. Website security settings do not establish PCI or financial regulatory compliance.
 
@@ -61,9 +63,11 @@ Current security headers include nosniff, frame denial, referrer policy, and a r
 | --- | --- |
 | `VITE_SITE_URL` | Confirmed canonical site origin, such as `https://your-approved-domain.example` |
 
-Without `VITE_SITE_URL`, canonical URLs, `og:url`, organization structured data, and sitemap generation are omitted. Do not put secrets in `VITE_*` variables; Vite bundles them into public client code. Worker secrets should later be configured as Cloudflare secrets, not committed files.
+Without `VITE_SITE_URL`, canonical URLs and `og:url` are omitted, Organization/WebSite structured data omits URL properties, the generated sitemap is an empty valid urlset, and robots.txt omits its Sitemap directive. This is intentional until the preferred production HTTPS hostname is confirmed. Preview hosts such as `workers.dev`, `pages.dev`, and `trycloudflare.com` are rejected. Do not put secrets in `VITE_*` variables; Vite bundles them into public client code. Worker secrets should later be configured as Cloudflare secrets, not committed files.
 
-Route SEO metadata updates during client-side navigation. This is a client-rendered SPA, so crawlers that do not execute JavaScript may not see route-specific metadata in the initial HTML. SSR or prerendering is intentionally out of scope for this phase.
+Public route metadata is rendered into each route's initial HTML during the Vite production build. Client navigation updates the same tags through the shared SEO head component. Configure the confirmed domain in `VITE_SITE_URL` before publishing so the generated canonical URLs, structured-data URLs, and sitemap use the production hostname.
+
+See [docs/seo-architecture.md](docs/seo-architecture.md) for how to add routes, page metadata, structured data, social images, redirects, and tests. Current public-page bodies remain approved-content placeholders; About and legal pages are especially content-light and need reviewed copy before launch.
 
 ## Forms and security
 
@@ -73,7 +77,7 @@ Route SEO metadata updates during client-side navigation. This is a client-rende
 
 ## Next phase
 
-Confirm brand assets, public domain, approved service details and disclosures, then design the homepage and service pages. Follow with an approved contact workflow, privacy/terms review, accessibility review, and production CSP design. Measure Core Web Vitals only after the design is integrated and deployed to a test environment.
+Confirm the preferred production domain, social-sharing image, approved service details, and legal disclosures. Expand the current placeholder page bodies only with reviewed content, then complete accessibility and content review before publishing. Measure Core Web Vitals after the approved design is integrated and deployed to a test environment.
 
 ## Lead management portal
 
